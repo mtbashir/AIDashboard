@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Data Mapper &amp; Instant Dashboard</title>
+<link rel="stylesheet" href="styles.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">▦</span>
+    <span>Data Mapper <em>&amp; Instant Dashboard</em></span>
+  </div>
+  <nav class="tabs" id="tabs" hidden>
+    <button data-tab="overview" class="active">Overview</button>
+    <button data-tab="deepdive">Measure deep-dive</button>
+    <button data-tab="master">Master data</button>
+  </nav>
+  <div class="topbar-actions" id="topbar-actions" hidden>
+    <span class="file-chip" id="file-chip"></span>
+    <button class="btn btn-ghost" id="btn-kpis">Σ KPIs</button>
+    <button class="btn btn-ghost" id="btn-remap">✎ Mapping</button>
+    <button class="btn btn-ghost" id="btn-new-file">⟳ New file</button>
+  </div>
+</header>
+
+<!-- ============ VIEW 1: UPLOAD ============ -->
+<main id="upload-view" class="view">
+  <section class="hero">
+    <h1>Turn any raw data into a dashboard</h1>
+    <p class="muted">Upload a file, map columns to dimensions (with hierarchies), measures,
+       date/time and an include-flag — then explore an interactive dashboard with
+       period-over-period analysis, drill-downs and custom KPIs.</p>
+
+    <div class="dropzone" id="dropzone">
+      <div class="dz-icon">⬆</div>
+      <div class="dz-title">Drag &amp; drop your file here</div>
+      <div class="dz-sub">CSV, XLSX or XLS &nbsp;·&nbsp; first sheet is used for Excel files</div>
+      <button class="btn btn-primary" id="btn-browse">Browse files</button>
+      <input type="file" id="file-input" accept=".csv,.tsv,.txt,.xlsx,.xls" hidden />
+    </div>
+
+    <div class="or-row"><span>or</span></div>
+    <button class="btn btn-ghost" id="btn-sample">▶ Try with sample sales data</button>
+
+    <div class="steps">
+      <div class="step"><b>1</b><span>Map columns<br><small>dimensions · hierarchies · measures · date · flag</small></span></div>
+      <div class="step"><b>2</b><span>Define KPIs<br><small>aggregate, average or combine measures</small></span></div>
+      <div class="step"><b>3</b><span>Analyze<br><small>period vs period · drill-down · comparisons</small></span></div>
+    </div>
+  </section>
+</main>
+
+<!-- ============ VIEW 2: DASHBOARD ============ -->
+<main id="dashboard-view" class="view" hidden>
+  <div class="dash-meta" id="dash-meta"></div>
+
+  <section class="filter-bar" id="period-bar"></section>
+  <section class="kpi-row" id="kpi-row"></section>
+  <section class="filter-bar" id="filter-bar"></section>
+
+  <!-- ---- TAB: OVERVIEW ---- -->
+  <section id="tab-overview">
+    <div class="charts-grid">
+      <div class="card chart-card wide" id="card-trend">
+        <h3 id="trend-title">Trend</h3>
+        <div class="chart-wrap"><canvas id="chart-trend"></canvas></div>
+      </div>
+
+      <div class="card chart-card" id="card-drill">
+        <div class="card-head">
+          <h3 id="drill-title">Drill-down</h3>
+          <select id="drill-group"></select>
+        </div>
+        <div class="breadcrumb" id="drill-breadcrumb"></div>
+        <div class="chart-wrap"><canvas id="chart-drill"></canvas></div>
+      </div>
+
+      <div class="card" id="card-movers">
+        <div class="card-head">
+          <h3>Top movers vs last period</h3>
+          <select id="movers-dim"></select>
+        </div>
+        <div class="movers-scroll"><table class="movers-table" id="movers-table"></table></div>
+      </div>
+
+      <div class="card chart-card wide" id="card-compare">
+        <div class="card-head">
+          <h3>Compare two dimensions</h3>
+          <div class="head-controls">
+            <select id="compare-a"></select>
+            <span class="muted">vs</span>
+            <select id="compare-b"></select>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="chart-compare"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card table-card">
+      <h3 id="table-title">Mapped data (current period)</h3>
+      <div class="table-scroll"><table id="data-table"></table></div>
+    </div>
+  </section>
+
+  <!-- ---- TAB: MEASURE DEEP-DIVE ---- -->
+  <section id="tab-deepdive" hidden>
+    <div class="chart-controls">
+      <div class="filter-item">
+        <label>Measure / KPI</label>
+        <select id="dd-kpi"></select>
+      </div>
+    </div>
+    <div class="charts-grid">
+      <div class="card chart-card wide">
+        <h3 id="dd-trend-title">Trend</h3>
+        <div class="chart-wrap"><canvas id="dd-trend"></canvas></div>
+      </div>
+      <div class="card chart-card wide">
+        <div class="card-head">
+          <h3>Compare two dimension hierarchies</h3>
+          <div class="head-controls">
+            <select id="dd-compare-a"></select>
+            <span class="muted">vs</span>
+            <select id="dd-compare-b"></select>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="dd-compare"></canvas></div>
+      </div>
+    </div>
+    <div class="charts-grid" id="dd-grid"></div>
+  </section>
+
+  <!-- ---- TAB: MASTER DATA ---- -->
+  <section id="tab-master" hidden>
+    <div class="master-head">
+      <p class="muted">Attribute master lists extracted from your dimensions. Stored locally in
+      your browser and exportable to Excel — this file can act as the master-data backend
+      (a Google Sheet / cloud database can be plugged in later).</p>
+      <button class="btn btn-primary" id="btn-export-master">⬇ Export master data (.xlsx)</button>
+    </div>
+    <div class="charts-grid" id="master-grid"></div>
+  </section>
+</main>
+
+<!-- ============ MAPPING MODAL ============ -->
+<div class="modal-overlay" id="mapping-modal" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h2>Map your columns</h2>
+        <p class="muted">We detected <b id="map-col-count"></b> columns in <b id="map-file-name"></b>.
+        Dimensions are numbered in the order you assign them. Link a dimension to another one
+        (e.g. <i>Product</i> linked to <i>Brand</i>) to build a drill-down hierarchy, and set
+        each level's hierarchy order.</p>
+      </div>
+      <button class="modal-close" id="btn-modal-close" title="Close">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <table class="map-table">
+        <thead>
+          <tr>
+            <th style="width:16%">Column</th>
+            <th style="width:19%">Sample values</th>
+            <th style="width:14%">Map as</th>
+            <th style="width:20%">Details</th>
+            <th style="width:17%">Hierarchy</th>
+            <th style="width:14%">Assigned</th>
+          </tr>
+        </thead>
+        <tbody id="map-tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="modal-foot">
+      <div class="map-summary" id="map-summary"></div>
+      <div class="modal-foot-right">
+        <span class="map-error" id="map-error"></span>
+        <button class="btn btn-ghost" id="btn-map-cancel">Cancel</button>
+        <button class="btn btn-primary" id="btn-map-apply">Continue →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ KPI MODAL ============ -->
+<div class="modal-overlay" id="kpi-modal" hidden>
+  <div class="modal modal-narrow">
+    <div class="modal-head">
+      <div>
+        <h2>Which KPIs do you want to track?</h2>
+        <p class="muted">A KPI is a measure with an aggregation (sum, average, min, max, count),
+        or two measures combined (multiplied or divided) to see their impact.
+        Every KPI appears in the dashboard header with its change vs last period.</p>
+      </div>
+      <button class="modal-close" id="btn-kpi-close" title="Close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="kpi-list"></div>
+      <button class="btn btn-ghost" id="btn-kpi-add" style="margin:10px 0 16px">+ Add KPI</button>
+    </div>
+    <div class="modal-foot">
+      <div class="map-summary"></div>
+      <div class="modal-foot-right">
+        <span class="map-error" id="kpi-error"></span>
+        <button class="btn btn-primary" id="btn-kpi-save">Save KPIs →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/core.js"></script>
+<script src="js/analytics.js"></script>
+<script src="js/mapper.js"></script>
+<script src="js/kpi.js"></script>
+<script src="js/dashboard.js"></script>
+<script src="js/deepdive.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
