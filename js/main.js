@@ -45,6 +45,82 @@ function renderMasterTab() {
     grid.innerHTML = '<p class="muted">No dimensions mapped — edit the mapping to add some.</p>';
 }
 
+/* ---------- color theme picker ---------- */
+function renderThemePanel() {
+  const panel = $('#theme-panel');
+  const theme = loadTheme();
+  panel.innerHTML = '';
+
+  const h = document.createElement('h4');
+  h.textContent = 'Color theme';
+  panel.appendChild(h);
+
+  const grid = document.createElement('div');
+  grid.className = 'theme-swatches';
+  for (const p of THEME_PRESETS) {
+    const sw = document.createElement('div');
+    sw.className = 'theme-swatch' + (theme.name === p.name ? ' active' : '');
+    sw.innerHTML = `<span class="dot" style="background:${p.bg}"></span><span>${p.label}</span>`;
+    sw.addEventListener('click', () => {
+      const t = { name: p.name };
+      saveTheme(t);
+      applyTheme(t);
+      renderThemePanel();
+    });
+    grid.appendChild(sw);
+  }
+  panel.appendChild(grid);
+
+  const custom = document.createElement('div');
+  custom.className = 'theme-custom';
+  custom.innerHTML = '<h4>Custom colors</h4>';
+  const base = theme.name === 'custom' && theme.custom ? theme.custom
+    : { bg: '#0e1117', panel: '#161b22', text: '#e6e9ef' };
+
+  const fields = [
+    ['bg', 'Background'],
+    ['panel', 'Tile color'],
+    ['text', 'Font color'],
+  ];
+  const inputs = {};
+  for (const [key, label] of fields) {
+    const row = document.createElement('div');
+    row.className = 'theme-custom-row';
+    row.innerHTML = `<span>${label}</span>`;
+    const inp = document.createElement('input');
+    inp.type = 'color';
+    inp.value = base[key];
+    inputs[key] = inp;
+    row.appendChild(inp);
+    custom.appendChild(row);
+  }
+
+  const applyBtn = document.createElement('button');
+  applyBtn.className = 'btn btn-primary theme-custom-apply';
+  applyBtn.textContent = theme.name === 'custom' ? 'Update custom theme' : 'Apply custom theme';
+  applyBtn.addEventListener('click', () => {
+    const t = { name: 'custom', custom: { bg: inputs.bg.value, panel: inputs.panel.value, text: inputs.text.value } };
+    saveTheme(t);
+    applyTheme(t);
+    renderThemePanel();
+  });
+  custom.appendChild(applyBtn);
+  panel.appendChild(custom);
+}
+
+function initThemePicker() {
+  const btn = $('#theme-btn');
+  const panel = $('#theme-panel');
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    if (panel.hidden) { renderThemePanel(); panel.hidden = false; }
+    else panel.hidden = true;
+  });
+  document.addEventListener('click', e => {
+    if (!panel.hidden && !panel.contains(e.target) && e.target !== btn) panel.hidden = true;
+  });
+}
+
 /* ---------- init ---------- */
 function init() {
   if (window.Chart) {
@@ -55,6 +131,7 @@ function init() {
   initUpload();
   initModal();
   initKpiModal();
+  initThemePicker();
 
   $$('#tabs button').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
   $('#btn-remap').addEventListener('click', () => openMappingModal());

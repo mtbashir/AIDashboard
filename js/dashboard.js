@@ -30,24 +30,134 @@ function dlOpts(kind) {
   if (kind === 'stack') return { ...base, anchor: 'center', align: 'center' };
   if (kind === 'hbar')  return { ...base, anchor: 'end', align: 'end' };
   if (kind === 'line')  return { ...base, anchor: 'end', align: 'top', offset: 2 };
+  if (kind === 'pie')   return { ...base, anchor: 'center', align: 'center', color: '#fff' };
   return { ...base, anchor: 'end', align: 'end' };          // vertical bars
 }
 
-function chartOpts({ y = false, legend = true, stacked = false, onClick = null, dl = 'bar' } = {}) {
+function chartOpts({ y = false, legend = true, stacked = false, onClick = null, dl = 'bar', hbar = false, pie = false } = {}) {
+  if (pie) {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      onClick: onClick || undefined,
+      plugins: {
+        legend: { display: legend && state.chartPrefs.legend, labels: { boxWidth: 12 } },
+        datalabels: dlOpts('pie'),
+      },
+    };
+  }
+  const valueScale = { beginAtZero: true, stacked, grid: { color: 'rgba(255,255,255,.06)' },
+                        ticks: { callback: v => nfCompact.format(v) } };
+  const catScale = { grid: { display: false }, stacked };
   return {
     responsive: true,
     maintainAspectRatio: false,
     onClick: onClick || undefined,
+    indexAxis: hbar ? 'y' : 'x',
     plugins: {
       legend: { display: legend && state.chartPrefs.legend, labels: { boxWidth: 12 } },
       datalabels: dlOpts(dl),
     },
-    scales: {
-      x: { grid: { display: false }, stacked },
-      y: y ? { beginAtZero: true, stacked, grid: { color: 'rgba(255,255,255,.06)' },
-               ticks: { callback: v => nfCompact.format(v) } } : undefined,
-    },
+    scales: hbar
+      ? { x: y ? valueScale : undefined, y: catScale }
+      : { x: catScale, y: y ? valueScale : undefined },
   };
+}
+
+/* ---------- dynamic chart types ---------- */
+const CHART_TYPE_OPTIONS = {
+  trend:     [['auto', 'Auto'], ['line', 'Line'], ['area', 'Area'], ['bar', 'Bar']],
+  drill:     [['auto', 'Auto'], ['bar', 'Bar'], ['hbar', 'Horizontal bar'], ['line', 'Line'], ['pie', 'Pie'], ['doughnut', 'Doughnut']],
+  compare:   [['auto', 'Auto (stacked)'], ['stacked', 'Stacked bar'], ['grouped', 'Grouped bar'], ['hbar', 'Horizontal bar'], ['line', 'Line'], ['pie', 'Pie']],
+  ddTrend:   [['auto', 'Auto'], ['line', 'Line'], ['area', 'Area'], ['bar', 'Bar']],
+  ddCompare: [['auto', 'Auto (stacked)'], ['stacked', 'Stacked bar'], ['grouped', 'Grouped bar'], ['hbar', 'Horizontal bar'], ['line', 'Line'], ['pie', 'Pie']],
+  ddDim:     [['auto', 'Auto (horizontal bar)'], ['bar', 'Vertical bar'], ['hbar', 'Horizontal bar'], ['line', 'Line'], ['pie', 'Pie'], ['doughnut', 'Doughnut']],
+};
+const CHART_TYPE_SELECTORS = {
+  trend: '#chart-trend-type', drill: '#chart-drill-type', compare: '#chart-compare-type',
+  ddTrend: '#chart-ddtrend-type', ddCompare: '#chart-ddcompare-type', ddDim: '#chart-dddim-type',
+};
+
+function setupChartTypeSelect(key) {
+  const sel = $(CHART_TYPE_SELECTORS[key]);
+  if (!sel) return;
+  if (!sel.dataset.wired) {
+    for (const [v, l] of CHART_TYPE_OPTIONS[key]) {
+      const opt = document.createElement('option');
+      opt.value = v; opt.textContent = l;
+      sel.appendChild(opt);
+    }
+    sel.addEventListener('change', () => {
+      state.chartTypes[key] = sel.value;
+      saveSession();
+      refreshAll();
+    });
+    sel.dataset.wired = '1';
+  }
+  sel.value = state.chartTypes[key] || 'auto';
+}
+
+/* turns a resolved chart-type id into Chart.js config pieces */
+function shapeForType(type, labels, datasets, pieValues) {
+  switch (type) {
+    case 'hbar':  return { chartType: 'bar',  hbar: true,  isPie: false, datasets };
+    case 'area':  return { chartType: 'line', hbar: false, isPie: false, datasets: datasets.map(d => ({ ...d, fill: true })) };
+    case 'line':  return { chartType: 'line', hbar: false, isPie: false, datasets: datasets.map(d => ({ ...d, fill: false })) };
+    case 'pie':
+    case 'doughnut': {
+      const values = pieValues || (datasets[0] ? datasets[0].data : []);
+      return {
+        chartType: type, hbar: false, isPie: true,
+        datasets: [{ data: values, backgroundColor: labels.map((_, i) => PALETTE[i % PALETTE.length]) }],
+      };
+    }
+    default: return { chartType: 'bar', hbar: false, isPie: false, datasets }; // bar / stacked / grouped
+  }
+}
+
+/* ---------- multi-select dropdown (used for "Measures on charts") ---------- */
+function renderMultiSelect(container, items, selectedIds, labelFn, onToggle) {
+  container.innerHTML = '';
+  const dd = document.createElement('div');
+  dd.className = 'ms-dropdown';
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'ms-button';
+  const summary = selectedIds.length === 1
+    ? labelFn(items.find(i => i.id === selectedIds[0]) || items[0])
+    : `${selectedIds.length} measures selected`;
+  btn.innerHTML = `<span>${escapeHtml(summary)}</span><span class="caret">▾</span>`;
+
+  const panel = document.createElement('div');
+  panel.className = 'ms-panel';
+  panel.hidden = true;
+
+  for (const item of items) {
+    const opt = document.createElement('label');
+    opt.className = 'ms-option';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = selectedIds.includes(item.id);
+    cb.addEventListener('change', () => onToggle(item.id, cb.checked));
+    const span = document.createElement('span');
+    span.textContent = labelFn(item);
+    opt.appendChild(cb);
+    opt.appendChild(span);
+    panel.appendChild(opt);
+  }
+
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    panel.hidden = !panel.hidden;
+  });
+  document.addEventListener('click', e => {
+    if (!panel.hidden && !dd.contains(e.target)) panel.hidden = true;
+  });
+
+  dd.appendChild(btn);
+  dd.appendChild(panel);
+  container.appendChild(dd);
 }
 
 /* the KPIs currently selected for plotting (multi-select, ≥1) */
@@ -280,37 +390,26 @@ function renderPeriodBar() {
     state.chartPrefs.legend = v; saveSession(); refreshAll();
   }));
 
-  // measures plotted on charts (multi-select chips)
+  // measures plotted on charts (multi-select dropdown)
   if (state.kpis.length) {
     chartKpiObjs();
     const item = document.createElement('div');
     item.className = 'filter-item';
     item.style.minWidth = '220px';
     item.innerHTML = '<label>Measures on charts</label>';
-    const rowEl = document.createElement('div');
-    rowEl.className = 'chip-row';
-    for (const k of state.kpis) {
-      const chip = document.createElement('button');
-      const on = state.chartKpis.includes(k.id);
-      chip.type = 'button';
-      chip.className = 'chip-toggle' + (on ? ' on' : '');
-      chip.textContent = kpiLabel(k);
-      chip.title = on ? 'Remove from charts' : 'Add to charts';
-      chip.addEventListener('click', () => {
-        if (on) {
-          if (state.chartKpis.length === 1) return;        // keep at least one
-          state.chartKpis = state.chartKpis.filter(id => id !== k.id);
-          if (state.activeKpi === k.id) state.activeKpi = state.chartKpis[0];
-        } else {
-          state.chartKpis.push(k.id);
-        }
-        saveSession();
-        renderPeriodBar();
-        refreshAll();
-      });
-      rowEl.appendChild(chip);
-    }
-    item.appendChild(rowEl);
+    const holder = document.createElement('div');
+    item.appendChild(holder);
+    renderMultiSelect(holder, state.kpis, state.chartKpis, kpiLabel, (id, checked) => {
+      if (checked) {
+        if (!state.chartKpis.includes(id)) state.chartKpis.push(id);
+      } else if (state.chartKpis.length > 1) {
+        state.chartKpis = state.chartKpis.filter(x => x !== id);
+        if (state.activeKpi === id) state.activeKpi = state.chartKpis[0];
+      }
+      saveSession();
+      renderPeriodBar();
+      refreshAll();
+    });
     bar.appendChild(item);
   }
 }
@@ -365,7 +464,7 @@ function renderFilterBar() {
 
 /* ---------- overview tab ---------- */
 function refreshOverview(recs, windows) {
-  renderTrendChart('chart-trend', '#trend-title', recs, chartKpiObjs(), windows);
+  renderTrendChart('chart-trend', '#trend-title', recs, chartKpiObjs(), windows, 'trend');
   renderDrill(recs, windows);
   renderCompareSection(recs, windows);
   renderMovers(recs, windows);
@@ -374,8 +473,9 @@ function refreshOverview(recs, windows) {
 
 /* shared trend renderer (also used by deep-dive); accepts one KPI or a list.
    With 2+ KPIs the first goes on the left axis and the rest on a right axis. */
-function renderTrendChart(canvasId, titleSel, recs, kpis, windows) {
+function renderTrendChart(canvasId, titleSel, recs, kpis, windows, typeKey) {
   destroyChart(canvasId);
+  setupChartTypeSelect(typeKey);
   const list = (Array.isArray(kpis) ? kpis : [kpis]).filter(Boolean);
   const card = $('#' + canvasId).closest('.card');
   if (!windows || !list.length) { card.hidden = true; return; }
@@ -462,14 +562,20 @@ function renderTrendChart(canvasId, titleSel, recs, kpis, windows) {
     `${list.map(kpiLabel).join(' · ')} by ${unit} — current vs last period` +
     (adjacent ? '' : ' (periods overlaid)');
 
-  const opts = chartOpts({ y: true, dl: 'line' });
-  if (multi) {
+  const userType = state.chartTypes[typeKey] || 'auto';
+  const resolved = userType === 'auto' ? 'line' : userType;
+  const shaped = shapeForType(resolved, labels, datasets);
+  const dl = shaped.chartType === 'line' ? 'line' : 'bar';
+  const opts = shaped.isPie
+    ? chartOpts({ pie: true, dl: 'pie' })
+    : chartOpts({ y: true, dl, hbar: shaped.hbar });
+  if (multi && !shaped.isPie && !shaped.hbar) {
     opts.scales.y1 = { beginAtZero: true, position: 'right', grid: { display: false },
                        ticks: { callback: v => nfCompact.format(v) } };
   }
   state.charts[canvasId] = new Chart($('#' + canvasId), {
-    type: 'line',
-    data: { labels, datasets },
+    type: shaped.chartType,
+    data: { labels, datasets: shaped.datasets },
     options: opts,
   });
 }
@@ -478,6 +584,7 @@ function renderTrendChart(canvasId, titleSel, recs, kpis, windows) {
 function renderDrill(recs, windows) {
   const card = $('#card-drill');
   destroyChart('chart-drill');
+  setupChartTypeSelect('drill');
   if (!state.groups.length) { card.hidden = true; return; }
   card.hidden = false;
 
@@ -551,19 +658,26 @@ function renderDrill(recs, windows) {
     $('#drill-title').textContent = `${kpiLabel(kpi)} by ${dim} (H${dims.indexOf(dim) + 1})`;
   }
 
+  const onClick = (evt, els) => {
+    if (!els.length) return;
+    if (state.drill.path.length >= dims.length - 1) return;   // deepest level
+    const member = labels[els[0].index];
+    state.drill.path.push({ col: dim, member });
+    refreshAll();
+  };
+
+  const userType = state.chartTypes.drill || 'auto';
+  const resolved = userType === 'auto' ? 'bar' : userType;
+  const shaped = shapeForType(resolved, labels, datasets);
+  const dl = shaped.chartType === 'line' ? 'line' : 'bar';
+  const opts = shaped.isPie
+    ? chartOpts({ pie: true, dl: 'pie', onClick })
+    : chartOpts({ y: true, legend: !!windows || kpis.length > 1, dl, hbar: shaped.hbar, onClick });
+
   state.charts['chart-drill'] = new Chart($('#chart-drill'), {
-    type: 'bar',
-    data: { labels, datasets },
-    options: chartOpts({
-      y: true, legend: !!windows || kpis.length > 1, dl: 'bar',
-      onClick: (evt, els) => {
-        if (!els.length) return;
-        if (state.drill.path.length >= dims.length - 1) return;   // deepest level
-        const member = labels[els[0].index];
-        state.drill.path.push({ col: dim, member });
-        refreshAll();
-      },
-    }),
+    type: shaped.chartType,
+    data: { labels, datasets: shaped.datasets },
+    options: opts,
   });
 }
 
@@ -599,12 +713,13 @@ function renderCompareSection(recs, windows) {
   aSel.onchange = () => { state.compare.a = aSel.value; if (state.compare.b === aSel.value) state.compare.b = null; refreshAll(); };
   bSel.onchange = () => { state.compare.b = bSel.value; refreshAll(); };
 
-  renderCompareChart('chart-compare', recs, kpiById(state.activeKpi), windows, state.compare.a, state.compare.b);
+  renderCompareChart('chart-compare', recs, kpiById(state.activeKpi), windows, state.compare.a, state.compare.b, 'compare');
 }
 
 /* shared: stacked bars of KPI by dimension A split by dimension B (current period) */
-function renderCompareChart(canvasId, recs, kpi, windows, colA, colB) {
+function renderCompareChart(canvasId, recs, kpi, windows, colA, colB, typeKey) {
   destroyChart(canvasId);
+  setupChartTypeSelect(typeKey);
   const cur = recsInWindow(recs, windows ? windows.cur : null);
 
   const byA = new Map();
@@ -637,10 +752,21 @@ function renderCompareChart(canvasId, recs, kpi, windows, colA, colB) {
     borderRadius: 3,
   }));
 
+  const userType = state.chartTypes[typeKey] || 'auto';
+  const resolved = userType === 'auto' ? 'stacked' : userType;
+  const stacked = resolved === 'stacked';
+  const labels = aMembers.map(String);
+  const pieValues = aMembers.map(a => totals.find(([m]) => m === a)?.[1] ?? 0);
+  const shaped = shapeForType(resolved, labels, datasets, pieValues);
+  const dl = shaped.isPie ? 'pie' : stacked ? 'stack' : shaped.chartType === 'line' ? 'line' : 'bar';
+  const opts = shaped.isPie
+    ? chartOpts({ pie: true, dl })
+    : chartOpts({ y: true, stacked, dl, hbar: shaped.hbar });
+
   state.charts[canvasId] = new Chart($('#' + canvasId), {
-    type: 'bar',
-    data: { labels: aMembers.map(String), datasets },
-    options: chartOpts({ y: true, stacked: true, dl: 'stack' }),
+    type: shaped.chartType,
+    data: { labels, datasets: shaped.datasets },
+    options: opts,
   });
 }
 

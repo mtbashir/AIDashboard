@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Data Mapper &amp; Instant Dashboard</title>
+<title>Consulytics IQ</title>
 <link rel="stylesheet" href="styles.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -15,7 +15,7 @@
 <header class="topbar">
   <div class="brand">
     <span class="brand-mark">▦</span>
-    <span>Data Mapper <em>&amp; Instant Dashboard</em></span>
+    <span>Consulytics <em>IQ</em></span>
   </div>
   <nav class="tabs" id="tabs" hidden>
     <button data-tab="overview" class="active">Overview</button>
@@ -28,12 +28,20 @@
     <button class="btn btn-ghost" id="btn-remap">✎ Mapping</button>
     <button class="btn btn-ghost" id="btn-new-file">⟳ New file</button>
   </div>
+  <div class="theme-picker" id="theme-picker">
+    <button class="btn btn-ghost" id="theme-btn" title="Color theme">🎨 Theme</button>
+    <div class="theme-panel" id="theme-panel" hidden></div>
+  </div>
+  <a class="powered-by" href="https://www.consulytics.ai" target="_blank" rel="noopener" title="Powered by Consulytics.AI">
+    <img src="assets/logo.svg" alt="Consulytics.AI" />
+  </a>
 </header>
 
 <!-- ============ VIEW 1: UPLOAD ============ -->
 <main id="upload-view" class="view">
   <section class="hero">
     <h1>Turn any raw data into a dashboard</h1>
+    <p class="muted" style="margin-top:-6px">A Consulytics IQ solution by <b>Consulytics.AI</b></p>
     <p class="muted">Upload a file, map columns to dimensions (with hierarchies), measures,
        date/time and an include-flag — then explore an interactive dashboard with
        period-over-period analysis, drill-downs and custom KPIs.</p>
@@ -69,14 +77,22 @@
   <section id="tab-overview">
     <div class="charts-grid">
       <div class="card chart-card wide" id="card-trend">
-        <h3 id="trend-title">Trend</h3>
+        <div class="card-head">
+          <h3 id="trend-title">Trend</h3>
+          <div class="head-controls">
+            <select id="chart-trend-type" class="chart-type-select" title="Chart type"></select>
+          </div>
+        </div>
         <div class="chart-wrap"><canvas id="chart-trend"></canvas></div>
       </div>
 
       <div class="card chart-card" id="card-drill">
         <div class="card-head">
           <h3 id="drill-title">Drill-down</h3>
-          <select id="drill-group"></select>
+          <div class="head-controls">
+            <select id="chart-drill-type" class="chart-type-select" title="Chart type"></select>
+            <select id="drill-group"></select>
+          </div>
         </div>
         <div class="breadcrumb" id="drill-breadcrumb"></div>
         <div class="chart-wrap"><canvas id="chart-drill"></canvas></div>
@@ -94,6 +110,7 @@
         <div class="card-head">
           <h3>Compare two dimensions</h3>
           <div class="head-controls">
+            <select id="chart-compare-type" class="chart-type-select" title="Chart type"></select>
             <select id="compare-a"></select>
             <span class="muted">vs</span>
             <select id="compare-b"></select>
@@ -116,16 +133,26 @@
         <label>Measure / KPI</label>
         <select id="dd-kpi"></select>
       </div>
+      <div class="filter-item">
+        <label>Dimension charts</label>
+        <select id="chart-dddim-type" class="chart-type-select"></select>
+      </div>
     </div>
     <div class="charts-grid">
       <div class="card chart-card wide">
-        <h3 id="dd-trend-title">Trend</h3>
+        <div class="card-head">
+          <h3 id="dd-trend-title">Trend</h3>
+          <div class="head-controls">
+            <select id="chart-ddtrend-type" class="chart-type-select" title="Chart type"></select>
+          </div>
+        </div>
         <div class="chart-wrap"><canvas id="dd-trend"></canvas></div>
       </div>
       <div class="card chart-card wide">
         <div class="card-head">
           <h3>Compare two dimension hierarchies</h3>
           <div class="head-controls">
+            <select id="chart-ddcompare-type" class="chart-type-select" title="Chart type"></select>
             <select id="dd-compare-a"></select>
             <span class="muted">vs</span>
             <select id="dd-compare-b"></select>

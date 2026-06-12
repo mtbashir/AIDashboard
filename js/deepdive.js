@@ -24,12 +24,13 @@ function refreshDeepdive() {
   kSel.onchange = () => { state.dd.kpi = kSel.value; refreshDeepdive(); };
   const kpi = kpiById(state.dd.kpi);
 
-  renderTrendChart('dd-trend', '#dd-trend-title', recs, kpi, windows);
+  renderTrendChart('dd-trend', '#dd-trend-title', recs, kpi, windows, 'ddTrend');
 
   // two-hierarchy comparison
   const allDims = state.groups.flatMap(g => g.dims);
   const compareCard = $('#dd-compare').closest('.card');
   destroyChart('dd-compare');
+  setupChartTypeSelect('ddCompare');
   if (allDims.length >= 2) {
     compareCard.hidden = false;
     if (!state.dd.a || !allDims.includes(state.dd.a)) state.dd.a = state.groups[0].dims[0];
@@ -40,7 +41,7 @@ function refreshDeepdive() {
     fillDimSelect(bSel, state.dd.b, state.dd.a);
     aSel.onchange = () => { state.dd.a = aSel.value; if (state.dd.b === aSel.value) state.dd.b = null; refreshDeepdive(); };
     bSel.onchange = () => { state.dd.b = bSel.value; refreshDeepdive(); };
-    renderCompareChart('dd-compare', recs, kpi, windows, state.dd.a, state.dd.b);
+    renderCompareChart('dd-compare', recs, kpi, windows, state.dd.a, state.dd.b, 'ddCompare');
   } else {
     compareCard.hidden = true;
   }
@@ -50,6 +51,10 @@ function refreshDeepdive() {
   for (const key of Object.keys(state.charts))
     if (key.startsWith('dd-dim-')) destroyChart(key);
   grid.innerHTML = '';
+  setupChartTypeSelect('ddDim');
+
+  const userType = state.chartTypes.ddDim || 'auto';
+  const resolved = userType === 'auto' ? 'hbar' : userType;
 
   let idx = 0;
   for (const g of state.groups) {
@@ -72,23 +77,17 @@ function refreshDeepdive() {
         label: 'Last period', data: vals.map(v => v.prev ?? 0),
         backgroundColor: 'rgba(152,162,179,.35)', borderRadius: 4,
       });
+
+      const shaped = shapeForType(resolved, labels, datasets);
+      const dl = shaped.isPie ? 'pie' : shaped.hbar ? 'hbar' : shaped.chartType === 'line' ? 'line' : 'bar';
+      const opts = shaped.isPie
+        ? chartOpts({ pie: true, dl, legend: !!windows })
+        : chartOpts({ y: true, legend: !!windows, dl, hbar: shaped.hbar });
+
       state.charts[canvasId] = new Chart($('#' + canvasId), {
-        type: 'bar',
-        data: { labels, datasets },
-        options: {
-          indexAxis: 'y',
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { display: !!windows && state.chartPrefs.legend, labels: { boxWidth: 12 } },
-            datalabels: dlOpts('hbar'),
-          },
-          scales: {
-            y: { grid: { display: false } },
-            x: { beginAtZero: true, grid: { color: 'rgba(255,255,255,.06)' },
-                 ticks: { callback: v => nfCompact.format(v) } },
-          },
-        },
+        type: shaped.chartType,
+        data: { labels, datasets: shaped.datasets },
+        options: opts,
       });
     }
   }

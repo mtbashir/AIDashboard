@@ -123,6 +123,7 @@ const state = {
   gran: 'auto',
   chartPrefs: { datalabels: false, legend: true },
   chartKpis: [],       // KPI ids plotted on the overview charts (multi-select)
+  chartTypes: { trend: 'auto', drill: 'auto', compare: 'auto', ddTrend: 'auto', ddCompare: 'auto', ddDim: 'auto' },
   sel: { dateCol: null },
   drill: { g: 0, path: [] },
   compare: { a: null, b: null },
@@ -191,6 +192,7 @@ function saveSession() {
       period: { mode: state.period.mode, n: state.period.n, unit: state.period.unit },
       chartPrefs: state.chartPrefs,
       chartKpis: state.chartKpis,
+      chartTypes: state.chartTypes,
     }));
     localStorage.setItem(columnsHash() + ':master', JSON.stringify(state.masterData));
   } catch { /* storage full or unavailable — non-fatal */ }
@@ -287,6 +289,7 @@ function ingestRows(rows) {
     if (saved.period) Object.assign(state.period, saved.period);
     if (saved.chartPrefs) Object.assign(state.chartPrefs, saved.chartPrefs);
     state.chartKpis = saved.chartKpis || [];
+    if (saved.chartTypes) Object.assign(state.chartTypes, saved.chartTypes);
     openMappingModal('Restored your saved mapping for this column layout — review and continue.');
   } else {
     state.kpis = [];
@@ -430,3 +433,67 @@ function loadSampleData() {
   state.fileName = 'sample_sales_data (generated)';
   ingestRows(rows);
 }
+
+/* ---------- color theme ---------- */
+const THEME_KEY = 'dmd:theme';
+const THEME_PRESETS = [
+  { name: 'dark',  label: 'Dark',  bg: '#0e1117', panel: '#161b22', text: '#e6e9ef' },
+  { name: 'light', label: 'White', bg: '#f3f5f8', panel: '#ffffff', text: '#1b2230' },
+  { name: 'grey',  label: 'Grey',  bg: '#dde1e7', panel: '#f1f3f6', text: '#20242c' },
+  { name: 'blue',  label: 'Blue',  bg: '#0b1f3a', panel: '#102a4c', text: '#e8f0ff' },
+  { name: 'lilac', label: 'Lilac', bg: '#f4f0fb', panel: '#ffffff', text: '#2e2240' },
+  { name: 'mint',  label: 'Mint',  bg: '#ecf8f1', panel: '#ffffff', text: '#1f3b30' },
+];
+
+function hexToRgb(hex) {
+  hex = String(hex).replace('#', '');
+  if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+  const num = parseInt(hex, 16);
+  return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+}
+function rgbToHex(rgb) {
+  return '#' + rgb.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+}
+function mixColors(c1, c2, t) {
+  const a = hexToRgb(c1), b = hexToRgb(c2);
+  return rgbToHex(a.map((v, i) => v + (b[i] - v) * t));
+}
+function relLuminance(hex) {
+  const [r, g, b] = hexToRgb(hex).map(v => v / 255);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function loadTheme() {
+  try {
+    const raw = localStorage.getItem(THEME_KEY);
+    return raw ? JSON.parse(raw) : { name: 'dark' };
+  } catch { return { name: 'dark' }; }
+}
+
+function saveTheme(theme) {
+  try { localStorage.setItem(THEME_KEY, JSON.stringify(theme)); } catch { /* ignore */ }
+}
+
+function applyTheme(theme) {
+  const root = document.documentElement;
+  const style = root.style;
+  for (const v of ['--bg', '--panel', '--panel-2', '--border', '--text', '--muted'])
+    style.removeProperty(v);
+
+  if (theme.name === 'custom' && theme.custom) {
+    const { bg, panel, text } = theme.custom;
+    const dark = relLuminance(bg) < 0.5;
+    const mixWith = dark ? '#ffffff' : '#000000';
+    root.dataset.theme = dark ? 'dark' : 'light';
+    style.setProperty('--bg', bg);
+    style.setProperty('--panel', panel);
+    style.setProperty('--panel-2', mixColors(panel, mixWith, 0.06));
+    style.setProperty('--border', mixColors(panel, mixWith, 0.2));
+    style.setProperty('--text', text);
+    style.setProperty('--muted', mixColors(text, bg, 0.45));
+  } else {
+    root.dataset.theme = theme.name || 'dark';
+  }
+}
+
+applyTheme(loadTheme());
