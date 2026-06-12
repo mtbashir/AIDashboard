@@ -176,11 +176,29 @@ function renderMultiSelect(container, items, selectedIds, labelFn, onToggle) {
 
   btn.addEventListener('click', e => {
     e.stopPropagation();
-    panel.hidden = !panel.hidden;
+    if (panel.hidden) {
+      // fixed-position the panel at the button so it floats above the
+      // filter bar instead of being clipped by its overflow scrolling
+      const r = btn.getBoundingClientRect();
+      panel.style.left = r.left + 'px';
+      panel.style.top = (r.bottom + 4) + 'px';
+      panel.style.minWidth = r.width + 'px';
+      panel.hidden = false;
+      const pr = panel.getBoundingClientRect();
+      if (pr.bottom > window.innerHeight - 8)
+        panel.style.top = Math.max(8, r.top - pr.height - 4) + 'px';
+      if (pr.right > window.innerWidth - 8)
+        panel.style.left = Math.max(8, window.innerWidth - 8 - pr.width) + 'px';
+    } else {
+      panel.hidden = true;
+    }
   });
   document.addEventListener('click', e => {
     if (!panel.hidden && !dd.contains(e.target)) panel.hidden = true;
   });
+  window.addEventListener('scroll', e => {
+    if (!panel.hidden && !panel.contains(e.target)) panel.hidden = true;
+  }, true);
 
   dd.appendChild(btn);
   dd.appendChild(panel);
