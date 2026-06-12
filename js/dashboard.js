@@ -17,12 +17,19 @@ function destroyChart(key) {
   if (state.charts[key]) { state.charts[key].destroy(); delete state.charts[key]; }
 }
 
-/* data-label settings per chart kind, honouring the user toggle */
-function dlOpts(kind) {
-  if (!state.chartPrefs.datalabels) return { display: false };
+/* per-chart display prefs (data labels & legend) */
+function prefFor(key) {
+  if (!state.chartPrefs[key]) state.chartPrefs[key] = { labels: false, legend: true };
+  return state.chartPrefs[key];
+}
+
+/* data-label settings per chart kind, honouring the per-chart toggle */
+function dlOpts(kind, on) {
+  if (!on) return { display: false };
+  const themeText = getComputedStyle(document.documentElement).getPropertyValue('--text').trim();
   const base = {
     display: true,
-    color: '#cdd5e0',
+    color: themeText || '#cdd5e0',
     font: { size: 10, weight: '600' },
     clamp: true,
     formatter: v => (v === null || v === undefined || v === 0) ? '' : nfCompact.format(v),
@@ -34,16 +41,16 @@ function dlOpts(kind) {
   return { ...base, anchor: 'end', align: 'end' };          // vertical bars
 }
 
-function chartOpts({ y = false, legend = true, stacked = false, onClick = null, dl = 'bar', hbar = false, pie = false } = {}) {
+function chartOpts({ y = false, legend = true, stacked = false, onClick = null, dl = 'bar', hbar = false, pie = false, prefKey = null } = {}) {
+  const prefs = prefKey ? prefFor(prefKey) : { labels: false, legend: true };
+  const legendConf = { display: legend && prefs.legend, labels: { boxWidth: 12 } };
+  const dlConf = dlOpts(pie ? 'pie' : dl, prefs.labels);
   if (pie) {
     return {
       responsive: true,
       maintainAspectRatio: false,
       onClick: onClick || undefined,
-      plugins: {
-        legend: { display: legend && state.chartPrefs.legend, labels: { boxWidth: 12 } },
-        datalabels: dlOpts('pie'),
-      },
+      plugins: { legend: legendConf, datalabels: dlConf },
     };
   }
   const valueScale = { beginAtZero: true, stacked, grid: { color: 'rgba(255,255,255,.06)' },
@@ -54,10 +61,7 @@ function chartOpts({ y = false, legend = true, stacked = false, onClick = null, 
     maintainAspectRatio: false,
     onClick: onClick || undefined,
     indexAxis: hbar ? 'y' : 'x',
-    plugins: {
-      legend: { display: legend && state.chartPrefs.legend, labels: { boxWidth: 12 } },
-      datalabels: dlOpts(dl),
-    },
+    plugins: { legend: legendConf, datalabels: dlConf },
     scales: hbar
       ? { x: y ? valueScale : undefined, y: catScale }
       : { x: catScale, y: y ? valueScale : undefined },
@@ -93,8 +97,31 @@ function setupChartTypeSelect(key) {
       refreshAll();
     });
     sel.dataset.wired = '1';
+
+    // per-chart display toggles next to the type selector
+    const tg = document.createElement('span');
+    tg.className = 'chart-toggles';
+    tg.id = 'toggles-' + key;
+    for (const [prop, text] of [['labels', 'Labels'], ['legend', 'Legend']]) {
+      const lab = document.createElement('label');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.dataset.prop = prop;
+      cb.addEventListener('change', () => {
+        prefFor(key)[prop] = cb.checked;
+        saveSession();
+        refreshAll();
+      });
+      lab.appendChild(cb);
+      lab.appendChild(document.createTextNode(text));
+      tg.appendChild(lab);
+    }
+    sel.parentElement.insertBefore(tg, sel);
   }
   sel.value = state.chartTypes[key] || 'auto';
+  const prefs = prefFor(key);
+  for (const cb of $('#toggles-' + key).querySelectorAll('input'))
+    cb.checked = !!prefs[cb.dataset.prop];
 }
 
 /* turns a resolved chart-type id into Chart.js config pieces */
@@ -228,25 +255,6 @@ function dateItem(label, value, onPick, { min = null, max = null } = {}) {
   return item;
 }
 
-function checkItem(label, checked, onChange) {
-  const item = document.createElement('div');
-  item.className = 'filter-item';
-  item.innerHTML = `<label>${escapeHtml(label)}</label>`;
-  const wrap = document.createElement('label');
-  wrap.className = 'switch-row';
-  const cb = document.createElement('input');
-  cb.type = 'checkbox';
-  cb.checked = checked;
-  cb.addEventListener('change', () => onChange(cb.checked));
-  const txt = document.createElement('span');
-  txt.className = 'muted';
-  txt.textContent = 'show';
-  wrap.appendChild(cb);
-  wrap.appendChild(txt);
-  item.appendChild(wrap);
-  return item;
-}
-
 function renderPeriodBar() {
   const bar = $('#period-bar');
   bar.innerHTML = '';
@@ -274,7 +282,7 @@ function renderPeriodBar() {
     modeItem.className = 'filter-item';
     modeItem.innerHTML = '<label>Analysis period</label>';
     const modeSel = document.createElement('select');
-    for (const [v, l] of [['rolling', 'Rolling: last N vs previous N'], ['custom', 'Pick current & last period']]) {
+    for (const [v, l] of [['rolling', 'Rolling periods'], ['custom', 'Pick custom periods']]) {
       const opt = document.createElement('option');
       opt.value = v; opt.textContent = l;
       if (state.period.mode === v) opt.selected = true;
@@ -382,20 +390,11 @@ function renderPeriodBar() {
     bar.appendChild(gItem);
   }
 
-  // chart display toggles (always available)
-  bar.appendChild(checkItem('Data labels', state.chartPrefs.datalabels, v => {
-    state.chartPrefs.datalabels = v; saveSession(); refreshAll();
-  }));
-  bar.appendChild(checkItem('Legend', state.chartPrefs.legend, v => {
-    state.chartPrefs.legend = v; saveSession(); refreshAll();
-  }));
-
   // measures plotted on charts (multi-select dropdown)
   if (state.kpis.length) {
     chartKpiObjs();
     const item = document.createElement('div');
     item.className = 'filter-item';
-    item.style.minWidth = '220px';
     item.innerHTML = '<label>Measures on charts</label>';
     const holder = document.createElement('div');
     item.appendChild(holder);
@@ -567,8 +566,8 @@ function renderTrendChart(canvasId, titleSel, recs, kpis, windows, typeKey) {
   const shaped = shapeForType(resolved, labels, datasets);
   const dl = shaped.chartType === 'line' ? 'line' : 'bar';
   const opts = shaped.isPie
-    ? chartOpts({ pie: true, dl: 'pie' })
-    : chartOpts({ y: true, dl, hbar: shaped.hbar });
+    ? chartOpts({ pie: true, dl: 'pie', prefKey: typeKey })
+    : chartOpts({ y: true, dl, hbar: shaped.hbar, prefKey: typeKey });
   if (multi && !shaped.isPie && !shaped.hbar) {
     opts.scales.y1 = { beginAtZero: true, position: 'right', grid: { display: false },
                        ticks: { callback: v => nfCompact.format(v) } };
@@ -671,8 +670,8 @@ function renderDrill(recs, windows) {
   const shaped = shapeForType(resolved, labels, datasets);
   const dl = shaped.chartType === 'line' ? 'line' : 'bar';
   const opts = shaped.isPie
-    ? chartOpts({ pie: true, dl: 'pie', onClick })
-    : chartOpts({ y: true, legend: !!windows || kpis.length > 1, dl, hbar: shaped.hbar, onClick });
+    ? chartOpts({ pie: true, dl: 'pie', onClick, prefKey: 'drill' })
+    : chartOpts({ y: true, legend: !!windows || kpis.length > 1, dl, hbar: shaped.hbar, onClick, prefKey: 'drill' });
 
   state.charts['chart-drill'] = new Chart($('#chart-drill'), {
     type: shaped.chartType,
@@ -760,8 +759,8 @@ function renderCompareChart(canvasId, recs, kpi, windows, colA, colB, typeKey) {
   const shaped = shapeForType(resolved, labels, datasets, pieValues);
   const dl = shaped.isPie ? 'pie' : stacked ? 'stack' : shaped.chartType === 'line' ? 'line' : 'bar';
   const opts = shaped.isPie
-    ? chartOpts({ pie: true, dl })
-    : chartOpts({ y: true, stacked, dl, hbar: shaped.hbar });
+    ? chartOpts({ pie: true, dl, prefKey: typeKey })
+    : chartOpts({ y: true, stacked, dl, hbar: shaped.hbar, prefKey: typeKey });
 
   state.charts[canvasId] = new Chart($('#' + canvasId), {
     type: shaped.chartType,

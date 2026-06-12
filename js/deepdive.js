@@ -81,8 +81,8 @@ function refreshDeepdive() {
       const shaped = shapeForType(resolved, labels, datasets);
       const dl = shaped.isPie ? 'pie' : shaped.hbar ? 'hbar' : shaped.chartType === 'line' ? 'line' : 'bar';
       const opts = shaped.isPie
-        ? chartOpts({ pie: true, dl, legend: !!windows })
-        : chartOpts({ y: true, legend: !!windows, dl, hbar: shaped.hbar });
+        ? chartOpts({ pie: true, dl, legend: !!windows, prefKey: 'ddDim' })
+        : chartOpts({ y: true, legend: !!windows, dl, hbar: shaped.hbar, prefKey: 'ddDim' });
 
       state.charts[canvasId] = new Chart($('#' + canvasId), {
         type: shaped.chartType,

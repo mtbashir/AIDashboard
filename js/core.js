@@ -121,7 +121,7 @@ const state = {
   period: { mode: 'rolling', n: 1, unit: 'month',
             from: null, to: null, lastFrom: null, lastTo: null, lastTouched: false },
   gran: 'auto',
-  chartPrefs: { datalabels: false, legend: true },
+  chartPrefs: {},      // per-chart { labels, legend } keyed by chart key (trend, drill, …)
   chartKpis: [],       // KPI ids plotted on the overview charts (multi-select)
   chartTypes: { trend: 'auto', drill: 'auto', compare: 'auto', ddTrend: 'auto', ddCompare: 'auto', ddDim: 'auto' },
   sel: { dateCol: null },
@@ -287,7 +287,15 @@ function ingestRows(rows) {
     state.kpis = saved.kpis || [];
     state.kpiConfigured = !!saved.kpiConfigured;
     if (saved.period) Object.assign(state.period, saved.period);
-    if (saved.chartPrefs) Object.assign(state.chartPrefs, saved.chartPrefs);
+    if (saved.chartPrefs) {
+      if ('datalabels' in saved.chartPrefs) {
+        // migrate the old global toggle shape to per-chart prefs
+        for (const k of Object.keys(state.chartTypes))
+          state.chartPrefs[k] = { labels: !!saved.chartPrefs.datalabels, legend: saved.chartPrefs.legend !== false };
+      } else {
+        Object.assign(state.chartPrefs, saved.chartPrefs);
+      }
+    }
     state.chartKpis = saved.chartKpis || [];
     if (saved.chartTypes) Object.assign(state.chartTypes, saved.chartTypes);
     openMappingModal('Restored your saved mapping for this column layout — review and continue.');

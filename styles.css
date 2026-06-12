@@ -82,6 +82,12 @@ h1, h2, h3 { font-weight: 600; margin: 0; }
 .muted { color: var(--muted); }
 [hidden] { display: none !important; }
 
+/* one standard control font everywhere */
+button, select, input, label {
+  font-family: inherit;
+  font-size: 13.5px;
+}
+
 /* ============ topbar ============ */
 .topbar {
   position: sticky;
@@ -117,6 +123,14 @@ h1, h2, h3 { font-weight: 600; margin: 0; }
   font-size: 16px;
 }
 .topbar-actions { display: flex; align-items: center; gap: 8px; }
+
+/* every topbar button identical in size */
+.topbar .btn {
+  width: 116px;
+  padding: 8px 0;
+  font-size: 13.5px;
+  text-align: center;
+}
 
 .powered-by {
   display: flex; align-items: center;
@@ -164,14 +178,28 @@ h1, h2, h3 { font-weight: 600; margin: 0; }
 }
 .theme-custom-apply { width: 100%; }
 
-/* ----- chart type selectors ----- */
-.chart-type-select { width: auto; max-width: 150px; font-size: 12.5px; padding: 6px 8px; }
+/* ----- chart type selectors & per-chart toggles ----- */
+.chart-type-select { width: auto; max-width: 150px; padding: 6px 8px; }
+.chart-toggles {
+  display: inline-flex; align-items: center; gap: 10px;
+  color: var(--muted); white-space: nowrap;
+}
+.chart-toggles label {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; cursor: pointer;
+}
+.chart-toggles input[type="checkbox"] {
+  width: 14px; height: 14px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
 
 /* ----- multi-select dropdown ----- */
 .ms-dropdown { position: relative; }
 .ms-button {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  width: 100%; max-width: 260px;
+  width: 100%; max-width: none;
+  overflow: hidden;
   background: var(--panel-2);
   color: var(--text);
   border: 1px solid var(--border);
@@ -217,7 +245,7 @@ h1, h2, h3 { font-weight: 600; margin: 0; }
   background: none;
   border: none;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 13.5px;
   padding: 8px 16px;
   border-radius: 8px;
   cursor: pointer;
@@ -230,7 +258,7 @@ h1, h2, h3 { font-weight: 600; margin: 0; }
   border: 1px solid var(--border);
   border-radius: 9px;
   padding: 9px 18px;
-  font-size: 14px;
+  font-size: 13.5px;
   cursor: pointer;
   background: var(--panel-2);
   color: var(--text);
@@ -414,32 +442,39 @@ input[type="number"] { max-width: 80px; }
 .kpi-def .kpi-remove:hover { color: var(--red); }
 
 /* ============ dashboard ============ */
-.dash-meta { color: var(--muted); font-size: 13.5px; margin-bottom: 14px; }
+.dash-meta {
+  color: var(--muted); font-size: 13.5px;
+  margin-top: 8px; padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
 .dash-meta b { color: var(--text); }
 
 .filter-bar {
-  display: flex; flex-wrap: wrap; gap: 14px;
+  display: flex; flex-wrap: nowrap; gap: 12px;
   align-items: flex-end;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 12px 16px;
   margin-bottom: 14px;
+  overflow-x: auto;
 }
 .filter-item { display: flex; flex-direction: column; gap: 5px; min-width: 140px; }
-.filter-item label { font-size: 11.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+.filter-item label { font-size: 11.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .filter-item.inline-row { flex-direction: row; align-items: center; gap: 8px; min-width: 0; }
 .filter-bar:empty { display: none; }
-.period-note { color: var(--muted); font-size: 12.5px; align-self: center; max-width: 170px; }
 
-.switch-row {
-  display: flex; align-items: center; gap: 7px;
-  height: 33px; cursor: pointer; font-size: 13px;
-}
-.switch-row input[type="checkbox"] {
-  width: 16px; height: 16px;
-  accent-color: var(--accent);
-  cursor: pointer;
+/* every control in the bar gets the same standard width */
+.filter-bar .filter-item { width: 160px; min-width: 160px; flex: 0 0 160px; }
+.filter-bar .filter-item .filter-item.inline-row { width: 100%; min-width: 0; flex: 1 1 auto; }
+.filter-bar .filter-item select,
+.filter-bar .filter-item input[type="date"] { width: 100%; max-width: none; }
+.filter-bar .inline-row input[type="number"] { width: 56px; flex: 0 0 56px; }
+.filter-bar .inline-row select { flex: 1; width: auto; }
+.period-note {
+  color: var(--muted); font-size: 12px;
+  align-self: center;
+  flex: 0 0 150px; max-width: 150px;
 }
 
 .kpi-row {
@@ -582,4 +617,5 @@ input[type="number"] { max-width: 80px; }
   .charts-grid { grid-template-columns: 1fr; }
   .steps { grid-template-columns: 1fr; }
   .tabs { justify-content: flex-start; }
+  .filter-bar { flex-wrap: wrap; }
 }
