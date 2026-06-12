@@ -92,7 +92,8 @@ h1, h2, h3 { font-weight: 600; margin: 0; }
   justify-content: space-between;
   gap: 16px;
   padding: 10px 24px;
-  background: rgba(14, 17, 23, 0.92);
+  background: var(--bg);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);
 }
